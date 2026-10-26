@@ -237,3 +237,24 @@ test('a message still sitting there says why it is', async ($, on) => {
   expect(await ui.find({ type: 'Button', text: /送出/ })).toBeTruthy()
   await ui.unmount()
 })
+
+test('what a person types is marked as a person typing it', async ($, on) => {
+  const sent: string[] = []
+  engine(on, sent)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.input({ key: 'compose', text: CODE })
+
+  await ui.input({ key: 'compose', text: '你好' })
+  await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '這句是模型說的' })
+  const go = await ui.find({ type: 'Button', text: /送出/ })
+  await ui.press({ key: go!.key! })
+
+  const out = posted(sent)
+  expect(out.length).toBe(2)
+  // Both sides reach the room through a bot credential, so without the marker
+  // the far side counts a greeting against its agent-to-agent budget.
+  expect(out[0]).toContain('"content":"alex -@ 你好"')
+  expect(out[1]).not.toContain('-@')
+  await ui.unmount()
+})

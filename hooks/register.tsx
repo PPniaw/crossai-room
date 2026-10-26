@@ -28,6 +28,19 @@ const JOINED = 'room'
 /** Discord's subtext prefix. Each side marks its own bookkeeping with it. */
 const NOTICE = '-#'
 
+/**
+ * Marks a message a person typed, as opposed to one their Claude produced.
+ *
+ * Both sides speak through a bot credential, so the transport says "a bot
+ * said this" about every message in the room -- the human's included. That
+ * cost someone a greeting: it was spent against the agent-to-agent hop budget
+ * and held, and the far side's model was told a bot had greeted it.
+ *
+ * The marker rides in the text because the transport carries nothing else of
+ * ours, and it is taken off before anyone reads it.
+ */
+const HUMAN = '-@'
+
 const API = 'https://discord.com/api/v10'
 
 /** Discord's own ceiling for one page of messages. */
@@ -157,7 +170,7 @@ function call($: EngineInterface, cfg: Address, path: string, init: { method?: s
  * is the one step that can fail for reasons they cannot see -- and a reply
  * that silently evaporated is worse than one still sitting in the pane.
  */
-async function deliver($: EngineInterface, text: string): Promise<boolean> {
+async function deliver($: EngineInterface, text: string, byHand = false): Promise<boolean> {
   const cfg = await address($)
   if (!cfg) {
     await update($, trouble, () => '還沒加入房間,沒有地方可以送')
@@ -166,7 +179,8 @@ async function deliver($: EngineInterface, text: string): Promise<boolean> {
   }
   // The far side's bot answers only when it is addressed, so the name goes in
   // front here and nobody has to remember it.
-  const content = cfg.to ? `${cfg.to} ${text}` : text
+  const said = byHand ? `${HUMAN} ${text}` : text
+  const content = cfg.to ? `${cfg.to} ${said}` : said
   const res = await call($, cfg, `/channels/${cfg.room}/messages`, {
     method: 'POST',
     body: JSON.stringify({ content }),
@@ -257,12 +271,16 @@ async function arrivals($: EngineInterface): Promise<Incoming[]> {
     if (!text) continue
     if (wire.author?.id === who) continue
     if (text.startsWith(NOTICE)) continue
-    const isBot = Boolean(wire.author?.bot)
+    const said = stripAddress(cfg.name, text)
+    // A person on the far side reaches the room through their own bot, so the
+    // transport calls them a bot too; only the marker tells them apart.
+    const byHand = said.startsWith(`${HUMAN} `)
+    const isBot = Boolean(wire.author?.bot) && !byHand
     fresh.push({
       id: wire.id,
       from: speaker(cfg.to, String(wire.author?.username ?? 'the other side'), isBot),
       role: isBot ? 'peer-ai' : 'peer-human',
-      text: stripAddress(cfg.name, text),
+      text: byHand ? said.slice(HUMAN.length + 1) : said,
     })
   }
 
@@ -334,6 +352,10 @@ export const register: Register = on => {
           await record($, { id: msg.id, side: 'them', name: msg.from, text: msg.text, state: 'held', why: '你設成「都問我」' })
           continue
         }
+        // The limit is there to stop two agents answering each other forever.
+        // A person typing is exactly the event it is waiting for, and it does
+        // not stop being one because it crossed a machine to get here.
+        if (msg.role === 'peer-human') await update($, hops, () => 0)
         const spent = await read($, hops)
         if (spent >= MAX_HOPS) {
           // The state the pane used to draw with no explanation.
@@ -586,7 +608,7 @@ export const register: Register = on => {
 
         return
       }
-      if (await deliver($, line)) await record($, mine(line, 'sent'))
+      if (await deliver($, line, true)) await record($, mine(line, 'sent'))
       else await record($, mine(line, 'pending', '送不出去,按一次再試'))
     }
 
