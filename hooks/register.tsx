@@ -548,20 +548,28 @@ export const register: Register = on => {
       const line = value.trim().replace(/\n+/g, ' ')
       if (!line) return
       await update($, draft, () => '')
+      // An invite code is checked for FIRST, in a joined room as much as an
+      // empty one. Otherwise pasting one into a room already joined sends it
+      // -- the credential and all -- to everyone in that room. It is the same
+      // shape of mistake as the rehearsal box: what the field means depended
+      // on a state the person was not thinking about.
+      const pasted = parseAddress(line)
+      if (pasted) {
+        const moving = here && pasted.room !== here.room
+        await enter($, pasted)
+        await $.ui.toast(
+          moving ? `換到另一個房間了,你叫「${pasted.name}」。` : `加入了,你叫「${pasted.name}」。`,
+        )
+
+        return
+      }
       if (here) {
         if (await deliver($, line)) await remember($, `你說:${line.slice(0, 40)}`)
         else await $.ui.toast('送不出去。')
 
         return
       }
-      const pasted = parseAddress(line)
-      if (!pasted) {
-        await $.ui.toast('這看起來不是邀請碼,所以沒有送出去。')
-
-        return
-      }
-      await enter($, pasted)
-      await $.ui.toast(`加入了,你叫「${pasted.name}」。`)
+      await $.ui.toast('這看起來不是邀請碼,所以沒有送出去。')
     }
 
     const explain = now === 'off' ? '都要你按' : now === 'in' ? '自動收,送出要按' : '全自動'
