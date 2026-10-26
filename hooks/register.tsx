@@ -967,7 +967,7 @@ export const register: Register = on => {
               key={`compose-${sends}`}
               label={here ? `對 ${here.to || '對面'} 說` : '邀請碼'}
               placeholder={here ? '打一句話直接送過去' : '貼在這裡'}
-              submitLabel="送"
+              submitLabel="送出"
               rows={2}
               onSubmit={(value: string) => void compose(value)}
             />
