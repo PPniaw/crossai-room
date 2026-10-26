@@ -208,3 +208,32 @@ test('a message does not arrive wearing the reader\'s own name', async () => {
   expect(stripAddress('eddie', 'eddies are a thing')).toBe('eddies are a thing')
   expect(stripAddress('', '沒有名字就不動它')).toBe('沒有名字就不動它')
 })
+
+test('what this side said is drawn under this side\'s name', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.input({ key: 'compose', text: CODE })
+
+  await ui.input({ key: 'compose', text: '我自己打的一句話' })
+
+  // The name comes from the invite code, so both sides of the room are
+  // labelled the same way: no "me" on one side and a username on the other.
+  expect((await ui.find({ type: 'Text', text: /^eddie$/ }))?.text).toBe('eddie')
+  expect((await ui.find({ type: 'Text', text: /我自己打的一句話/ }))?.text).toBeTruthy()
+  await ui.unmount()
+})
+
+test('a message still sitting there says why it is', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.input({ key: 'compose', text: CODE })
+  await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '等放行的一句' })
+
+  // A button with no reason beside it is what made "自動收發 and yet a button"
+  // look like a bug. Every message that has not moved says why it has not.
+  expect((await ui.find({ type: 'Text', text: /等你放行/ }))?.text).toBeTruthy()
+  expect(await ui.find({ type: 'Button', text: /送出/ })).toBeTruthy()
+  await ui.unmount()
+})

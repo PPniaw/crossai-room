@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AutoMode, Incoming, Outgoing, RoomConfig } from '../types'
+import type { AutoMode, Incoming, RoomConfig, Turn } from '../types'
 
 /**
  * The room, as a pane beside the chat.
@@ -42,24 +42,48 @@ const PAGE = 50
  * one full turn at a time.
  */
 const MAX_HOPS = 1
-
-const incoming = atom({ plugin: 'crossai-room', key: 'incoming' } as const, [])
-const outgoing = atom({ plugin: 'crossai-room', key: 'outgoing' } as const, [])
-const note = atom({ plugin: 'crossai-room', key: 'note' } as const, '')
+const history = atom({ plugin: 'crossai-room', key: 'history' } as const, [])
 const mode = atom({ plugin: 'crossai-room', key: 'mode' } as const, 'off')
 const hops = atom({ plugin: 'crossai-room', key: 'hops' } as const, 0)
 const me = atom({ plugin: 'crossai-room', key: 'me' } as const, '')
-const log = atom({ plugin: 'crossai-room', key: 'log' } as const, [])
 const draft = atom({ plugin: 'crossai-room', key: 'draft' } as const, '')
 const room = atom({ plugin: 'crossai-room', key: 'room' } as const, null)
+const trouble = atom({ plugin: 'crossai-room', key: 'trouble' } as const, '')
 const selfId = atom({ plugin: 'crossai-room', key: 'selfId' } as const, '')
 const cursor = atom({ plugin: 'crossai-room', key: 'cursor' } as const, '')
+
+/** How much of the room the pane remembers. */
+const KEEP = 30
+
+/** How much of it is drawn at once, newest last. */
+const SHOW = 6
 
 /** The address plus its credential. Only `$.store` and locals ever hold it. */
 type Address = RoomConfig & { key: string }
 
-async function remember($: EngineInterface, line: string): Promise<void> {
-  await update($, log, list => [...list, line].slice(-4))
+async function record($: EngineInterface, turn: Turn): Promise<void> {
+  await update($, history, list => [...list, turn].slice(-KEEP))
+}
+
+/** Change one line of the room, or drop it by answering null. */
+async function amend(
+  $: EngineInterface,
+  id: string,
+  change: (turn: Turn) => Turn | null,
+): Promise<void> {
+  await update($, history, list =>
+    list.flatMap(one => {
+      if (one.id !== id) return [one]
+      const next = change(one)
+
+      return next ? [next] : []
+    }),
+  )
+}
+
+/** A line of the room for something this side did, not something it said. */
+function mine(text: string, state: Turn['state'], why?: string): Turn {
+  return { id: `o${Date.now()}${Math.random().toString(36).slice(2, 6)}`, side: 'me', name: '', text, state, why }
 }
 
 /**
@@ -136,7 +160,7 @@ function call($: EngineInterface, cfg: Address, path: string, init: { method?: s
 async function deliver($: EngineInterface, text: string): Promise<boolean> {
   const cfg = await address($)
   if (!cfg) {
-    await remember($, '還沒加入房間,沒有地方可以送')
+    await update($, trouble, () => '還沒加入房間,沒有地方可以送')
 
     return false
   }
@@ -148,7 +172,7 @@ async function deliver($: EngineInterface, text: string): Promise<boolean> {
     body: JSON.stringify({ content }),
   }).catch(() => null)
   if (!res || !res.ok) {
-    await remember($, `送不出去${res ? ` (HTTP ${res.status})` : ''},留在待送`)
+    await update($, trouble, () => `送不出去${res ? `(HTTP ${res.status})` : ''}`)
 
     return false
   }
@@ -198,7 +222,7 @@ async function arrivals($: EngineInterface): Promise<Incoming[]> {
   if (!who) {
     const res = await call($, cfg, '/users/@me').catch(() => null)
     if (!res || !res.ok) {
-      await remember($, `連不上房間${res ? ` (HTTP ${res.status})` : ''}`)
+      await update($, trouble, () => `連不上房間${res ? `(HTTP ${res.status})` : ''}`)
 
       return []
     }
@@ -214,7 +238,7 @@ async function arrivals($: EngineInterface): Promise<Incoming[]> {
   if (!res || !res.ok) {
     // 429 is the poll being told to slow down, which the next tick does by
     // itself. Saying so every three seconds would bury the real failures.
-    if (res && res.status !== 429) await remember($, `讀不到房間 (HTTP ${res.status})`)
+    if (res && res.status !== 429) await update($, trouble, () => `讀不到房間(HTTP ${res.status})`)
 
     return []
   }
@@ -277,15 +301,12 @@ function preview(text: string, width = 64): string {
   return flat.length > width ? `${flat.slice(0, width)}…` : flat
 }
 
-/** How many waiting messages are drawn in full before they become a wall. */
-const SHOW = 3
-
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'room',
       description: '房間:貼上邀請碼加入,或改這一側自己做多少事',
-      argumentHint: 'join <邀請碼> · auto off|in|on · leave',
+      argumentHint: 'join <邀請碼> · auto off|in|on · name <你是誰> · leave',
     })
     await $.tool.register({
       name: 'say_to_peer',
@@ -308,50 +329,41 @@ export const register: Register = on => {
       if (fresh.length === 0) return
 
       const now = await read($, mode)
-      if (now === 'off') {
-        await update($, incoming, list => [...list, ...fresh].slice(-50))
-        await update($, note, () => `${fresh.length} 則等你`)
-        await $.ui.toast(`對方來了 ${fresh.length} 則訊息`)
-
-        return
-      }
-
-      // Automatic, but on the rule a room with two agents needs: anything
-      // held back still goes to the pane rather than being dropped.
-      const joined = (await read($, room)) !== null
-      const name = (await read($, me)).toLowerCase()
       for (const msg of fresh) {
-        // A joined room has one peer and its own messages are already
-        // filtered out, so everything left is for this side. Unjoined, the
-        // files are shared by however many sides are in the directory, and
-        // the name is what tells them apart.
-        const addressed = joined || name.length === 0 || msg.text.toLowerCase().includes(name)
-        const spent = await read($, hops)
-        if (!addressed) {
-          await update($, incoming, list => [...list, msg].slice(-50))
-          await remember($, `擱著:沒有指名 ${name || '(還沒設名字)'}`)
+        if (now === 'off') {
+          await record($, { id: msg.id, side: 'them', name: msg.from, text: msg.text, state: 'held', why: '你設成「都問我」' })
           continue
         }
+        const spent = await read($, hops)
         if (spent >= MAX_HOPS) {
-          await update($, incoming, list => [...list, msg].slice(-50))
-          await remember($, `擱著:已連續 ${spent}/${MAX_HOPS} 次,該換人說話`)
+          // The state the pane used to draw with no explanation.
+          await record($, {
+            id: msg.id,
+            side: 'them',
+            name: msg.from,
+            text: msg.text,
+            state: 'held',
+            why: `已經連回 ${spent} 次了,要有人說句話才會再自動接下去`,
+          })
           continue
         }
         await update($, hops, n => n + 1)
-        await remember($, `放進來:${msg.from}`)
+        await record($, { id: msg.id, side: 'them', name: msg.from, text: msg.text, state: 'in' })
         void $.prompt.submit({ text: envelope([msg]) })
+      }
+      if (fresh.length > 0 && (await read($, mode)) === 'off') {
+        await $.ui.toast(`對方來了 ${fresh.length} 則訊息`)
       }
     }
 
-    await update($, log, () => [])
-
-    // Restore what `/room join` wrote in an earlier session. The credential
-    // stays in the store; only the address reaches a value the pane reads.
+    // Restore what a join wrote in an earlier session. The credential stays in
+    // the store; only the address reaches a value the pane reads.
     const known = await address($)
     if (known) {
       await update($, room, () => ({ name: known.name, to: known.to, via: known.via, room: known.room }))
       await update($, me, () => known.name)
     }
+    await update($, trouble, () => '')
 
     $.clock.every(3000, () => void poll())
 
@@ -413,16 +425,13 @@ export const register: Register = on => {
     if (join?.[1]) {
       const cfg = parseAddress(join[1])
       if (!cfg) {
-        return {
-          text: '這個邀請碼看不懂。跟對方要一次完整的,整段一起貼,中間不要斷行。',
-        }
+        return { text: '這個邀請碼看不懂。跟對方要一次完整的,整段一起貼,中間不要斷行。' }
       }
       await enter($, cfg)
       void $.ui.open({ id: PANE, title: '房間' })
 
       return {
         text: `加入了。你在房間裡叫「${cfg.name}」,對面是「${cfg.to || '還沒設'}」。\n`
-          + '模式先設成「自動收」:對方的訊息會自己進來,要送出去的一律等你按。\n'
           + '右邊的房間面板就是全部的操作。',
       }
     }
@@ -438,7 +447,6 @@ export const register: Register = on => {
 
       return { text: `這一側叫「${named[1]!.trim()}」。` }
     }
-
     if (args === 'leave') {
       await $.store.delete(JOINED)
       await update($, room, () => null)
@@ -463,7 +471,7 @@ export const register: Register = on => {
 
     if ((await read($, mode)) === 'on') {
       if (await deliver($, text)) {
-        await remember($, `送出:${text.slice(0, 40)}`)
+        await record($, mine(text, 'sent'))
         const answer = 'Sent to the other side. The room is in auto mode, so it went out as written.'
 
         return { result: answer, text: answer }
@@ -471,14 +479,14 @@ export const register: Register = on => {
       // It did not leave, so it is parked rather than lost, and the agent is
       // told the truth: a reply it believes was delivered is the one failure
       // the person cannot recover from.
-      await update($, outgoing, list => [...list, { id: `o${Date.now()}`, text }].slice(-50))
+      await record($, mine(text, 'pending', '送不出去,按一次再試'))
       await $.ui.toast('送不出去,留在房間面板了。')
       const failed = 'The room could not reach the other side. It is parked in the pane, not sent.'
 
       return { result: failed, text: failed }
     }
 
-    await update($, outgoing, list => [...list, { id: `o${Date.now()}`, text }].slice(-50))
+    await record($, mine(text, 'pending', '等你放行'))
     await $.ui.toast('有一則回覆在房間面板等你放行。')
     const answer = 'Queued for your owner to approve in the room pane. Not sent yet.'
 
@@ -493,14 +501,13 @@ export const register: Register = on => {
     const elements = $.ui.resolve(e)
     const { Box, Button, Text } = elements
     const canCompose = 'Input' in elements
-    const waiting = await read($, incoming)
-    const pending = await read($, outgoing)
+    const said = await read($, history)
     const now = await read($, mode)
     const here = await read($, room)
     const name = await read($, me)
     const spent = await read($, hops)
-    const lines = await read($, log)
     const typed = await read($, draft)
+    const wrong = await read($, trouble)
 
     const setMode = (next: AutoMode) => async () => {
       await update($, mode, () => next)
@@ -512,8 +519,9 @@ export const register: Register = on => {
      * a radio group: a filled dot on the one in force.
      *
      * The dot does the work rather than `variant` and `dimColor` alone,
-     * because those are colour, and colour is what is missing from a screenshot,
-     * a light terminal theme and anyone who cannot pick the accent out.
+     * because those are colour, and colour is what is missing from a
+     * screenshot, a light terminal theme and anyone who cannot pick the accent
+     * out.
      */
     const modeButton = (value: AutoMode, label: string) => {
       const live = now === value
@@ -529,38 +537,25 @@ export const register: Register = on => {
       )
     }
 
-    const letIn = (msg: Incoming) => async () => {
-      await update($, incoming, list => list.filter(one => one.id !== msg.id))
-      void $.prompt.submit({ text: envelope([msg]) })
+    const letIn = (turn: Turn) => async () => {
+      await amend($, turn.id, one => ({ ...one, state: 'in', why: undefined }))
+      void $.prompt.submit({
+        text: envelope([{ id: turn.id, from: turn.name, role: 'peer-ai', text: turn.text }]),
+      })
     }
 
-    const drop = (msg: Incoming) => async () => {
-      await update($, incoming, list => list.filter(one => one.id !== msg.id))
+    const forget = (turn: Turn) => async () => {
+      await amend($, turn.id, () => null)
     }
 
-    const letAllIn = async (): Promise<void> => {
-      const all = await read($, incoming)
-      if (all.length === 0) return
-      await update($, incoming, () => [])
-      void $.prompt.submit({ text: envelope(all) })
-    }
-
-    const dropAll = async (): Promise<void> => {
-      await update($, incoming, () => [])
-    }
-
-    const send = (out: Outgoing) => async () => {
-      if (!(await deliver($, out.text))) {
+    const send = (turn: Turn) => async () => {
+      if (!(await deliver($, turn.text))) {
         await $.ui.toast('送不出去,先留著了。')
 
         return
       }
-      await update($, outgoing, list => list.filter(one => one.id !== out.id))
+      await amend($, turn.id, one => ({ ...one, state: 'sent', why: undefined }))
       await $.ui.toast('送出去了。')
-    }
-
-    const hold = (out: Outgoing) => async () => {
-      await update($, outgoing, list => list.filter(one => one.id !== out.id))
     }
 
     /**
@@ -568,25 +563,14 @@ export const register: Register = on => {
      * enter *is* the approval, and a queue in front of it would only ask them
      * to approve what they just wrote.
      *
-     * Unjoined, the same box takes the invite code, because `/plugin` does not
-     * run in the desktop app's Code tab and a setup needing a typed command is
-     * a setup that strands the person this mod is for.
-     *
-     * What it no longer does is rehearse. This box used to mean "pretend the
-     * other side said this" before joining and "say this to the other side"
-     * after -- the same box, the opposite meaning, and nothing between them,
-     * so a line typed out of habit went to a real person. Pretending is now
-     * gone, along with the transport that carried it.
+     * An invite code is checked for FIRST, in a joined room as much as an
+     * empty one. Otherwise pasting one into a room already joined sends it --
+     * the credential and all -- to everyone in that room.
      */
     const compose = async (value: string): Promise<void> => {
       const line = value.trim().replace(/\n+/g, ' ')
       if (!line) return
       await update($, draft, () => '')
-      // An invite code is checked for FIRST, in a joined room as much as an
-      // empty one. Otherwise pasting one into a room already joined sends it
-      // -- the credential and all -- to everyone in that room. It is the same
-      // shape of mistake as the rehearsal box: what the field means depended
-      // on a state the person was not thinking about.
       const pasted = parseAddress(line)
       if (pasted) {
         const moving = here && pasted.room !== here.room
@@ -597,20 +581,62 @@ export const register: Register = on => {
 
         return
       }
-      if (here) {
-        if (await deliver($, line)) await remember($, `你說:${line.slice(0, 40)}`)
-        else await $.ui.toast('送不出去。')
+      if (!here) {
+        await $.ui.toast('這看起來不是邀請碼,所以沒有送出去。')
 
         return
       }
-      await $.ui.toast('這看起來不是邀請碼,所以沒有送出去。')
+      if (await deliver($, line)) await record($, mine(line, 'sent'))
+      else await record($, mine(line, 'pending', '送不出去,按一次再試'))
     }
 
     const explain = now === 'off' ? '都要你按' : now === 'in' ? '自動收,送出要按' : '全自動'
-    // Past a few, the choice stops being per-message: nobody picks three of
-    // thirteen. So the list becomes a list and the buttons move to the batch.
-    const few = waiting.length <= SHOW
-    const shown = few ? waiting : waiting.slice(-SHOW)
+    const shown = said.slice(-SHOW)
+    const hidden = said.length - shown.length
+    const label = (turn: Turn): string => (turn.side === 'me' ? name || '我' : turn.name)
+
+    /** One line of the room: who, what, why it is still here, what to do. */
+    const line = (turn: Turn) => {
+      const right = turn.side === 'me'
+      const place = right ? 'flex-end' : 'flex-start'
+      const acts =
+        turn.state === 'held'
+          ? [
+              <Button key={`in-${turn.id}`} label="交給 Claude" onPress={letIn(turn)} />,
+              <Button key={`no-${turn.id}`} label="不理" onPress={forget(turn)} />,
+            ]
+          : turn.state === 'pending'
+            ? [
+                <Button key={`go-${turn.id}`} label="送出" onPress={send(turn)} />,
+                <Button key={`st-${turn.id}`} label="先留著" onPress={forget(turn)} />,
+              ]
+            : []
+
+      return (
+        <Box key={turn.id} flexDirection="column" marginBottom={1}>
+          <Box justifyContent={place}>
+            <Text color={right ? 'claude' : 'permission'} bold>
+              {label(turn)}
+            </Text>
+          </Box>
+          <Box justifyContent={place}>
+            <Text dimColor={turn.state === 'sent' || turn.state === 'in' ? false : true}>
+              {preview(turn.text, 180)}
+            </Text>
+          </Box>
+          {turn.why && (
+            <Box justifyContent={place}>
+              <Text dimColor>{turn.why}</Text>
+            </Box>
+          )}
+          {acts.length > 0 && (
+            <Box justifyContent={place} gap={1} marginTop={1}>
+              {acts}
+            </Box>
+          )}
+        </Box>
+      )
+    }
 
     return (
       <Box flexDirection="column">
@@ -618,50 +644,20 @@ export const register: Register = on => {
           <Text bold>{here ? `${name} ↔ ${here.to || '對面'}` : '還沒加入房間'}</Text>
           <Text dimColor> · {explain}</Text>
         </Box>
-        <Box gap={1}>
+        <Box gap={1} marginBottom={1}>
           {modeButton('off', '都問我')}
           {modeButton('in', '自動收')}
           {modeButton('on', '自動收發')}
         </Box>
         {!here && <Text dimColor>把對方給你的邀請碼貼到下面那格,按「送」就加入了</Text>}
+        {wrong.length > 0 && <Text color="error">{wrong}</Text>}
         {now !== 'off' && spent >= MAX_HOPS && (
-          <Text dimColor>已連續回了 {spent} 次,說句話才會再自動接下去</Text>
+          <Text dimColor>自動回覆暫停中:說句話就會再接下去</Text>
         )}
 
-        {waiting.length > 0 && <Text bold>對方說 ({waiting.length})</Text>}
-        {waiting.length > SHOW && <Text dimColor>前面還有 {waiting.length - SHOW} 則</Text>}
-        {shown.map(msg => (
-          <Box key={msg.id} flexDirection="column" marginBottom={few ? 1 : 0}>
-            <Text>
-              {msg.from}: {preview(msg.text)}
-            </Text>
-            {few && (
-              <Box gap={1}>
-                <Button key={`in-${msg.id}`} label="交給 Claude" onPress={letIn(msg)} />
-                <Button key={`no-${msg.id}`} label="不理" onPress={drop(msg)} />
-              </Box>
-            )}
-          </Box>
-        ))}
-        {!few && (
-          <Box gap={1}>
-            <Button key="all-in" label={`全部交給 Claude (${waiting.length})`} onPress={letAllIn} />
-            <Button key="all-no" label="全部清掉" onPress={dropAll} />
-          </Box>
-        )}
-
-        {pending.length > 0 && <Text bold>等你放行 ({pending.length})</Text>}
-        {pending.map(out => (
-          <Box key={out.id} flexDirection="column" marginBottom={1}>
-            <Text>{preview(out.text)}</Text>
-            <Box gap={1}>
-              <Button key={`go-${out.id}`} label="送出" onPress={send(out)} />
-              <Button key={`st-${out.id}`} label="先留著" onPress={hold(out)} />
-            </Box>
-          </Box>
-        ))}
-
-        {waiting.length === 0 && pending.length === 0 && <Text dimColor>沒有在等的東西。</Text>}
+        {here && said.length === 0 && <Text dimColor>還沒有人說話。</Text>}
+        {hidden > 0 && <Text dimColor>只畫最近 {SHOW} 則,上面還有 {hidden} 則</Text>}
+        {shown.map(line)}
 
         {canCompose ? (
           <elements.Input
@@ -671,27 +667,12 @@ export const register: Register = on => {
             submitLabel="送"
             value={typed}
             // The field keeps what was typed until the hook draws a different
-            // value, so a `draft` that never changes clears nothing: after a
-            // submit it drew the same empty string it drew before, and the
-            // invite code stayed in the box. Tracking the text makes the
-            // clear a change -- and because the value drawn always equals what
-            // is in the box, nothing is fighting the person as they type.
+            // value, so a `draft` that never changes clears nothing.
             onInput={(value: string) => void update($, draft, () => value)}
             onSubmit={(value: string) => void compose(value)}
           />
         ) : (
           <Text dimColor>這個介面沒有輸入框,要用 /room join 才能加入</Text>
-        )}
-        {lines.length > 0 && (
-          <Box flexDirection="column" marginTop={1}>
-            <Text dimColor>剛剛發生的事</Text>
-            {lines.map((line, i) => (
-              <Text key={`l${i}`} dimColor>
-                {'  '}
-                {line}
-              </Text>
-            ))}
-          </Box>
         )}
       </Box>
     )
