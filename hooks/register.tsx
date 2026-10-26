@@ -631,7 +631,9 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Box gap={1} alignItems="center">
+        {/* A row between who said it and what they said: the badge sitting on
+          * the border read as one control rather than a name over a message. */}
+        <Box gap={1} alignItems="center" marginBottom={1}>
           {/* No Svg on the terminal, where the coloured name does the work. */}
           {'Svg' in drawn && (
             <drawn.Svg source={badge(said.name || '對面')} alt={said.name || '對面'} />
