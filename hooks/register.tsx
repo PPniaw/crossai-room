@@ -641,7 +641,11 @@ export const register: Register = on => {
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
-          <Text dimColor>{said.from === 'peer-human' ? '對面的人' : '對面的 Claude'}</Text>
+          {/* The name is already the other side, so "對面的人" said it twice.
+            * What is left to say is which of the two over there spoke, and
+            * that is worth saying: a person's words lift the brake that waits
+            * for one, and their Claude's do not. */}
+          <Text dimColor>{said.from === 'peer-human' ? '本人' : '的 Claude'}</Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
           <drawn.Markdown text={said.body} />

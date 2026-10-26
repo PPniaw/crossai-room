@@ -301,7 +301,8 @@ test('a room message is drawn as a card, with the plumbing left out', async ($, 
   // The body is markdown because the other side writes markdown: drawn as
   // plain text, its own formatting lands in front of the person as symbols.
   expect((await ui.find({ type: 'Markdown' }))?.props?.text).toBe('1+1 = ?')
-  expect((await ui.find({ type: 'Text', text: /對面的人/ }))?.text).toBe('對面的人')
+  // Which of the two on that side spoke, since the name is already the side.
+  expect((await ui.find({ type: 'Text', text: /本人/ }))?.text).toBe('本人')
   // A bubble that hugs what was said, rather than a full-width panel: the
   // whole point of the drawing is that this came from somewhere else.
   expect(await ui.find({ type: 'Box' })).toBeTruthy()
