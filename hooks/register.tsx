@@ -464,7 +464,7 @@ export const register: Register = on => {
     await $.command.register({
       name: 'room',
       description: '房間:貼上邀請碼加入,或改這一側自己做多少事',
-      argumentHint: 'join <邀請碼> · say <一句話> · auto off|in|on · leave',
+      argumentHint: 'join <邀請碼> · say <一句話> · auto off|in|on · clear · leave',
     })
     await $.tool.register({
       name: 'say_to_peer',
@@ -626,6 +626,19 @@ export const register: Register = on => {
       await noteSent($, (await read($, room))?.to || '對面', line)
 
       return { text: `送出去了:${line}` }
+    }
+
+    if (args === 'clear') {
+      // The pane's own record only. Nothing is unsent, nothing is deleted
+      // from the room itself, and what the model has already read it has
+      // already read -- `/clear` is what empties that.
+      const had = (await read($, history)).length
+      await update($, history, () => [])
+      await update($, trouble, () => '')
+
+      return {
+        text: `面板清空了(${had} 則)。已經送出去的收不回來,你的 Claude 讀過的也還在它的上下文裡——那個要用 /clear。`,
+      }
     }
 
     if (args === 'leave') {
@@ -933,9 +946,14 @@ export const register: Register = on => {
           <Text dimColor>自動回覆暫停中:說句話就會再接下去</Text>
         )}
 
-        {here && said.length === 0 && <Text dimColor>還沒有人說話。</Text>}
-        {hidden > 0 && <Text dimColor>只畫最近 {SHOW} 則,上面還有 {hidden} 則</Text>}
-        {shown.map(line)}
+        {/* The room grows to fill the pane, which puts the field at the
+          * bottom and keeps it there while there is room. Past that the pane
+          * scrolls and the field goes with it: a pane draws one tree. */}
+        <Box flexDirection="column" flexGrow={1}>
+          {here && said.length === 0 && <Text dimColor>還沒有人說話。</Text>}
+          {hidden > 0 && <Text dimColor>只畫最近 {SHOW} 則,上面還有 {hidden} 則</Text>}
+          {shown.map(line)}
+        </Box>
 
         {/*
           * The field is the last thing in the tree, and focusing it draws a
@@ -950,6 +968,7 @@ export const register: Register = on => {
               label={here ? `對 ${here.to || '對面'} 說` : '邀請碼'}
               placeholder={here ? '打一句話直接送過去' : '貼在這裡'}
               submitLabel="送"
+              rows={3}
               onSubmit={(value: string) => void compose(value)}
             />
           ) : (

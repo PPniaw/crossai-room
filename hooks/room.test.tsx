@@ -482,3 +482,23 @@ test('the model learns whether its reply left or was dropped', async ($, on) => 
   expect(dropped).toContain('never saw it')
   await ui.unmount()
 })
+
+test('clearing the pane clears the pane and nothing else', async ($, on) => {
+  const sent: string[] = []
+  engine(on, sent)
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+  await say(ui, '一句話')
+  expect((await ui.find({ type: 'Text', text: /一句話/ }))?.text).toBeTruthy()
+
+  const typed = { origin: { kind: 'composer' as const }, presentation: { isFullscreen: false, columns: 80 } }
+  const answer = await $.command.run({ command: 'room', args: 'clear', ...typed })
+
+  expect(await ui.find({ type: 'Text', text: /一句話/ })).toBeFalsy()
+  // Still joined: clearing the record is not leaving the room.
+  expect((await ui.find({ type: 'Text', text: /eddie ↔ alex/ }))?.text).toBeTruthy()
+  // And it says what it did not do.
+  expect(String(answer.text)).toContain('收不回來')
+  await ui.unmount()
+})
