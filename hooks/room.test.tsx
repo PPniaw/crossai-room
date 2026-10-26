@@ -398,3 +398,20 @@ test('the pane and the transcript draw the same room the same way', async ($, on
   expect((await ui.find({ type: 'Text', text: /^eddie$/ }))?.text).toBe('eddie')
   await ui.unmount()
 })
+
+test('a phone can still speak as itself, through the command', async ($, on) => {
+  const sent: string[] = []
+  engine(on, sent)
+  await $.session.start({ cwd: '/', surface: 'mobile', isInteractive: true })
+
+  /** What the engine stamps on a command a person typed. */
+  const typed = { origin: { kind: 'composer' as const }, presentation: { isFullscreen: false, columns: 80 } }
+  await $.command.run({ command: 'room', args: `join ${CODE}`, ...typed })
+  await $.command.run({ command: 'room', args: 'say 你好', ...typed })
+
+  // Mobile's table has no `Input`, so without this everything from a phone
+  // goes through the model and lands on the far side as the AI speaking.
+  const out = posted(sent)
+  expect(out.length).toBe(1)
+  expect(out[0]).toContain('"content":"alex -@ 你好"')
+})

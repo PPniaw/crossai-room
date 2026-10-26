@@ -382,7 +382,7 @@ export const register: Register = on => {
     await $.command.register({
       name: 'room',
       description: '房間:貼上邀請碼加入,或改這一側自己做多少事',
-      argumentHint: 'join <邀請碼> · auto off|in|on · name <你是誰> · leave',
+      argumentHint: 'join <邀請碼> · say <一句話> · auto off|in|on · leave',
     })
     await $.tool.register({
       name: 'say_to_peer',
@@ -527,6 +527,24 @@ export const register: Register = on => {
 
       return { text: `這一側叫「${named[1]!.trim()}」。` }
     }
+    const say = /^say\s+([\s\S]+)$/.exec(args)
+    if (say?.[1]) {
+      // The one way to speak as yourself on a phone. The pane's field is
+      // where this is done everywhere else, and mobile's table has no
+      // `Input`: without this, everything a person sends from a phone goes
+      // through their Claude and reaches the other side as the AI speaking.
+      const line = say[1].trim().replace(/\n+/g, ' ')
+      if (!(await read($, room))) return { text: '還沒加入房間,先貼邀請碼。' }
+      if (!(await deliver($, line, true))) {
+        await record($, mine(line, 'pending', '送不出去,按一次再試'))
+
+        return { text: '送不出去,留在房間面板了。' }
+      }
+      await record($, mine(line, 'sent'))
+
+      return { text: `送出去了:${line}` }
+    }
+
     if (args === 'leave') {
       await $.store.delete(JOINED)
       await update($, room, () => null)
