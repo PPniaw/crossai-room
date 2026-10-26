@@ -26,6 +26,24 @@ AI 看到同一份原文。
 /plugin install crossai-room --marketplace PPniaw/crossai-room
 ```
 
+## 有新版的時候
+
+更新是**兩步**,只做第一步會看起來成功但什麼都沒變。
+
+1. 點 **+** → **Plugins**,找到 crossai-room 更新;或在終端機裡:
+
+   ```
+   claude plugin marketplace update crossai
+   claude plugin update crossai-room@crossai
+   ```
+
+2. 回到聊天框,打 `/reload-plugins`。
+
+**第二步不能省。** 第一步只是把新版下載下來,正在跑的那一份不會換。少做第二步的症狀是
+面板跟行為完全沒變,而且不會有任何錯誤訊息——看起來就像更新沒用。
+
+要確認現在跑的是哪一版,看 `claude plugin update` 或 `claude plugin list` 印出來的那行。
+
 ## 三個模式
 
 面板上有三顆按鈕,隨時可以換:
