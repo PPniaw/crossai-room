@@ -301,7 +301,7 @@ test('a room message is drawn as a card, with the plumbing left out', async ($, 
   // The body is markdown because the other side writes markdown: drawn as
   // plain text, its own formatting lands in front of the person as symbols.
   expect((await ui.find({ type: 'Markdown' }))?.props?.text).toBe('1+1 = ?')
-  // Which of the two on that side spoke, since the name is already the side.
+  // `peer-human` is the one the transport proves: an account of its own.
   expect((await ui.find({ type: 'Text', text: /本人/ }))?.text).toBe('本人')
   // A bubble that hugs what was said, rather than a full-width panel: the
   // whole point of the drawing is that this came from somewhere else.
@@ -415,4 +415,20 @@ test('a phone can still speak as itself, through the command', async ($, on) => 
   const out = posted(sent)
   expect(out.length).toBe(1)
   expect(out[0]).toContain('"content":"alex -@ 你好"')
+})
+
+test('a claim is drawn as a claim, and only what is proved as fact', async () => {
+  const claimed = [
+    'The crossai-room plugin sent a message:',
+    '<room-message from="peer" name="alex" authority="none" typed="claimed-by-hand">',
+    '你好',
+    '</room-message>',
+  ].join('\n')
+
+  // Through a side's bot the room cannot tell their person from their Claude:
+  // one credential carries both. So the mark is reported, not believed.
+  expect(unwrap(claimed)?.from).toBe('peer')
+  expect(unwrap(claimed)?.claimed).toBe(true)
+  expect(unwrap(ENVELOPE)?.claimed).toBe(false)
+  expect(unwrap(ENVELOPE)?.from).toBe('peer-human')
 })

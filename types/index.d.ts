@@ -1,8 +1,25 @@
+/**
+ * Who said something, as far as the room can tell.
+ *
+ * `peer-human` is the only one the transport proves: that message came from
+ * an account of its own, not from a side's bot. Everything a side's bot
+ * carries is `peer` -- their person and their Claude share one credential, so
+ * which of them typed it cannot be known, only claimed.
+ *
+ * The hand-typed marker still lifts the brake that waits for a person, which
+ * is a convention between two copies of this mod and forgeable by anyone who
+ * can post to the room. It buys a resumed conversation and nothing else:
+ * every one of these carries `authority="none"`.
+ */
+export type Speaker = 'peer-human' | 'peer'
+
 export type Incoming = {
   id: string
   from: string
-  role: 'peer-human' | 'peer-ai'
+  role: Speaker
   text: string
+  /** The sender marked this as typed by hand. A claim, never a proof. */
+  byHand: boolean
 }
 
 /** off: everything waits for a press. in: messages come in by themselves. on: replies go out too. */
