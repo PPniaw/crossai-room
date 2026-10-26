@@ -606,24 +606,29 @@ export const register: Register = on => {
    * the original props, so the worst case is the text as it was.
    */
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
-    const origin = e.props.origin
-    if (origin?.kind !== 'plugin' || origin.name !== 'crossai-room') return next(e)
-    // The row is this plugin's, so even an envelope that does not parse is
-    // ours to draw: the framing line comes off and what is left is shown. A
-    // changed envelope should cost the name, not dump the plumbing back on
-    // someone who asked not to see it.
+    // Not by `origin`: at render time this row's origin is `{kind:"sdk"}`,
+    // because the desktop app hosts the session through the Agent SDK. The
+    // stored transcript row says `{kind:"plugin",name:"crossai-room"}`, which
+    // is where that condition came from -- a shape read from one place and
+    // assumed in another, and it is what kept the card from ever drawing.
+    //
+    // The envelope has to open the text, so a message that merely quotes one
+    // is not drawn as a card. An `AssistantMessage` quoting it is a different
+    // component and never reaches this hook at all.
+    const opens = /^(?:The \S+ plugin sent a message:\n)?<room-message /.test(e.props.text)
+    if (!opens) return next(e)
+    // The row is ours even where the envelope does not parse, so a changed
+    // envelope costs the name, not the card: falling through would put the
+    // framing and the tags back in front of the one person who asked not to
+    // see them.
     const said = unwrap(e.props.text) ?? {
       from: '',
       name: '',
-      body: e.props.text.replace(/^The [^\n]* plugin sent a message:\n/, '').trim(),
+      body: e.props.text.replace(/^The \S+ plugin sent a message:\n/, '').trim(),
     }
     const drawn = $.ui.resolve(e)
     const { Box, Text } = drawn
 
-    // A bubble, and `alignSelf` so it hugs what was said instead of running
-    // the width of the transcript: a short line in a full-width box reads as
-    // a panel, which is what the engine already draws. The whole point is
-    // that this came from somewhere else.
     return (
       <Box flexDirection="column" marginBottom={1}>
         <Box gap={1} alignItems="center">
@@ -637,14 +642,6 @@ export const register: Register = on => {
           <Text dimColor>{said.from === 'peer-human' ? '對面的人' : '對面的 Claude'}</Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
-          {/*
-            * The other side writes markdown -- code fences, bold, lists --
-            * because it is a Claude writing to a Claude. Drawn as plain text
-            * its own formatting became literal backticks and asterisks in
-            * front of the person, which is the opposite of a card.
-            *
-            * `Markdown` is on every surface's table, so this needs no guard.
-            */}
           <drawn.Markdown text={said.body} />
         </Box>
       </Box>
