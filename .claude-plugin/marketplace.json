@@ -1,0 +1,5 @@
+{
+  "name": "crossai",
+  "owner": { "name": "PPniaw" },
+  "plugins": [{ "name": "crossai-room", "source": "./" }]
+}

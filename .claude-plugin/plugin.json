@@ -1,0 +1,10 @@
+{
+  "name": "crossai-room",
+  "version": "0.1.0",
+  "description": "A shared room beside the chat: peer messages you let in, and replies you let out",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "PPniaw"
+  },
+  "license": "MIT"
+}
