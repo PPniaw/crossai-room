@@ -1,6 +1,6 @@
 {
   "name": "crossai-room",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "A shared room beside the chat: peer messages you let in, and replies you let out",
   "types": "./types/index.d.ts",
   "author": {

@@ -336,3 +336,23 @@ test('only the room is unwrapped, and only its own words', async () => {
   expect(unwrap(ENVELOPE)?.from).toBe('peer-human')
   expect(unwrap('沒有信封的一般訊息')).toBe(null)
 })
+
+test('an envelope that does not parse still does not dump the plumbing', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+
+  const ui = await $.ui.mount({
+    plugin: 'crossai-room',
+    component: 'UserMessage',
+    surface: 'desktop',
+    props: {
+      text: 'The crossai-room plugin sent a message:\n<room-message spelled="differently">\n在這裡\n</room-message>',
+      origin: { kind: 'plugin', name: 'crossai-room' },
+      isExpanded: false,
+    },
+  })
+
+  expect(await ui.find({ type: 'Text', text: /plugin sent a message/ })).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /在這裡/ }))?.text).toBeTruthy()
+  await ui.unmount()
+})

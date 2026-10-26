@@ -562,8 +562,15 @@ export const register: Register = on => {
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
     const origin = e.props.origin
     if (origin?.kind !== 'plugin' || origin.name !== 'crossai-room') return next(e)
-    const said = unwrap(e.props.text)
-    if (!said) return next(e)
+    // The row is this plugin's, so even an envelope that does not parse is
+    // ours to draw: the framing line comes off and what is left is shown. A
+    // changed envelope should cost the name, not dump the plumbing back on
+    // someone who asked not to see it.
+    const said = unwrap(e.props.text) ?? {
+      from: '',
+      name: '',
+      body: e.props.text.replace(/^The [^\n]* plugin sent a message:\n/, '').trim(),
+    }
     const { Box, Text } = $.ui.resolve(e)
 
     // A bubble, and `alignSelf` so it hugs what was said instead of running
