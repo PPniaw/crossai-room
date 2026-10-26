@@ -637,7 +637,7 @@ export const register: Register = on => {
       await update($, trouble, () => '')
 
       return {
-        text: `面板清空了(${had} 則)。已經送出去的收不回來,你的 Claude 讀過的也還在它的上下文裡——那個要用 /clear。`,
+        text: `聊天室清空了(${had} 則)。已經送出去的收不回來,你的 Claude 讀過的也還在它的上下文裡——那個要用 /clear。`,
       }
     }
 
@@ -804,7 +804,7 @@ export const register: Register = on => {
       await update($, trouble, () => '')
       // A button has no answer to read, so the toast carries what the command
       // says in words: this empties the pane and nothing else.
-      await $.ui.toast(`清空了 ${had} 則。送出去的收不回來,Claude 讀過的要用 /clear。`)
+      await $.ui.toast(`聊天室清空了 ${had} 則。送出去的收不回來,Claude 讀過的要用 /clear。`)
     }
 
     const letIn = (turn: Turn) => async () => {
@@ -947,7 +947,7 @@ export const register: Register = on => {
           </Box>
           {/* Only when there is something to clear: a button that does
             * nothing is a button to wonder about. */}
-          {said.length > 0 && <Button key="wipe" label="✕ 清空" dimColor onPress={wipe} />}
+          {said.length > 0 && <Button key="wipe" label="✕ 清空聊天室" dimColor onPress={wipe} />}
         </Box>
         <Box gap={1} marginBottom={1}>
           {modeButton('off', '都問我')}
