@@ -54,6 +54,17 @@ function engine(
 
 const posted = (sent: string[]): string[] => sent.filter(one => one.startsWith('POST'))
 
+/**
+ * Type into the composer, whatever its key is at the time.
+ *
+ * Sending replaces the field to empty it, so its key changes with each one;
+ * a test that named the key would be asserting on how the field is cleared.
+ */
+async function say(ui: { find: Function; input: Function }, text: string): Promise<void> {
+  const box = await ui.find({ type: 'Input' })
+  await ui.input({ key: box.key, text })
+}
+
 test('pasting an invite code joins the room', async ($, on) => {
   const sent: string[] = []
   engine(on, sent)
@@ -62,7 +73,7 @@ test('pasting an invite code joins the room', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect((await ui.find({ type: 'Text', text: /還沒加入房間/ }))?.text).toBeTruthy()
 
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
 
   expect((await ui.find({ type: 'Text', text: /eddie/ }))?.text).toContain('alex')
   expect(sent.filter(one => one.startsWith('POST'))).toEqual([])
@@ -75,9 +86,9 @@ test('an invite code is never sent, even in a joined room', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
   // The dangerous one: a second code pasted while a room is already joined.
-  await ui.input({ key: 'compose', text: 'name=eddie to=bob via=discord room=777 key=TOKEN-B' })
+  await say(ui, 'name=eddie to=bob via=discord room=777 key=TOKEN-B')
 
   const posts = sent.filter(one => one.startsWith('POST'))
   expect(posts).toEqual([])
@@ -107,7 +118,7 @@ test('a reply waits in the pane and goes nowhere until it is released', async ($
   engine(on, sent)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
 
   const answer = await $.tool.call({
     tool: 'mcp__crossai-room__say_to_peer',
@@ -135,7 +146,7 @@ test('holding a reply drops it without sending it', async ($, on) => {
   engine(on, sent)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
   await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '先不要講這句' })
 
   const hold = await ui.find({ type: 'Button', text: /先留著/ })
@@ -152,7 +163,7 @@ test('ordinary words typed before joining are not sent anywhere', async ($, on) 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
 
-  await ui.input({ key: 'compose', text: '我的 build 掛了,錯誤是 TS2345' })
+  await say(ui, '我的 build 掛了,錯誤是 TS2345')
 
   expect(sent).toEqual([])
   expect((await ui.find({ type: 'Text', text: /還沒加入房間/ }))?.text).toBeTruthy()
@@ -177,7 +188,7 @@ test('the room tells the model it is in one, and only once joined', async ($, on
   expect(JSON.stringify(before.sections)).not.toContain('say_to_peer')
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
 
   const after = await $.prompt.compose(COMPOSE)
   const mine = after.sections.find(one => one.id === 'crossai-room:room')
@@ -217,9 +228,9 @@ test('what this side said is drawn under this side\'s name', async ($, on) => {
   engine(on, [])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
 
-  await ui.input({ key: 'compose', text: '我自己打的一句話' })
+  await say(ui, '我自己打的一句話')
 
   // The name comes from the invite code, so both sides of the room are
   // labelled the same way: no "me" on one side and a username on the other.
@@ -232,7 +243,7 @@ test('a message still sitting there says why it is', async ($, on) => {
   engine(on, [])
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
   await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '等放行的一句' })
 
   // A button with no reason beside it is what made "自動收發 and yet a button"
@@ -247,9 +258,9 @@ test('what a person types is marked as a person typing it', async ($, on) => {
   engine(on, sent)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  await ui.input({ key: 'compose', text: CODE })
+  await say(ui, CODE)
 
-  await ui.input({ key: 'compose', text: '你好' })
+  await say(ui, '你好')
   await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '這句是模型說的' })
   const go = await ui.find({ type: 'Button', text: /送出/ })
   await ui.press({ key: go!.key! })

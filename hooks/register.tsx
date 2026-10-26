@@ -59,7 +59,7 @@ const history = atom({ plugin: 'crossai-room', key: 'history' } as const, [])
 const mode = atom({ plugin: 'crossai-room', key: 'mode' } as const, 'off')
 const hops = atom({ plugin: 'crossai-room', key: 'hops' } as const, 0)
 const me = atom({ plugin: 'crossai-room', key: 'me' } as const, '')
-const draft = atom({ plugin: 'crossai-room', key: 'draft' } as const, '')
+const round = atom({ plugin: 'crossai-room', key: 'round' } as const, 0)
 const room = atom({ plugin: 'crossai-room', key: 'room' } as const, null)
 const trouble = atom({ plugin: 'crossai-room', key: 'trouble' } as const, '')
 const selfId = atom({ plugin: 'crossai-room', key: 'selfId' } as const, '')
@@ -93,6 +93,15 @@ async function amend(
     }),
   )
 }
+
+/**
+ * The last thing sent by hand, so an immediate repeat of it is dropped.
+ *
+ * A field that is replaced on submit can be submitted once more by the
+ * element being replaced, and a duplicate here is not cosmetic: the far side
+ * reads it twice and may answer it twice.
+ */
+let lastSaid = { text: '', at: 0 }
 
 /** A line of the room for something this side did, not something it said. */
 function mine(text: string, state: Turn['state'], why?: string): Turn {
@@ -595,7 +604,7 @@ export const register: Register = on => {
     const here = await read($, room)
     const name = await read($, me)
     const spent = await read($, hops)
-    const typed = await read($, draft)
+    const sends = await read($, round)
     const wrong = await read($, trouble)
 
     const setMode = (next: AutoMode) => async () => {
@@ -659,7 +668,15 @@ export const register: Register = on => {
     const compose = async (value: string): Promise<void> => {
       const line = value.trim().replace(/\n+/g, ' ')
       if (!line) return
-      await update($, draft, () => '')
+      const at = Date.now()
+      if (line === lastSaid.text && at - lastSaid.at < 2000) return
+      lastSaid = { text: line, at }
+      // Replacing the field is what empties it. A `value` the hook draws is
+      // taken only when it differs from the one drawn before, so redrawing an
+      // empty string over someone's typing changes nothing -- and tracking
+      // every keystroke to make it differ is what made the text flicker: each
+      // key went out to the engine and came back as a redraw of the field.
+      await update($, round, n => n + 1)
       const pasted = parseAddress(line)
       if (pasted) {
         const moving = here && pasted.room !== here.room
@@ -766,14 +783,10 @@ export const register: Register = on => {
         <Box flexDirection="column" marginTop={1} marginBottom={1}>
           {canCompose ? (
             <elements.Input
-              key="compose"
+              key={`compose-${sends}`}
               label={here ? `對 ${here.to || '對面'} 說` : '邀請碼'}
               placeholder={here ? '打一句話直接送過去' : '貼在這裡'}
               submitLabel="送"
-              value={typed}
-              // The field keeps what was typed until the hook draws a different
-              // value, so a `draft` that never changes clears nothing.
-              onInput={(value: string) => void update($, draft, () => value)}
               onSubmit={(value: string) => void compose(value)}
             />
           ) : (

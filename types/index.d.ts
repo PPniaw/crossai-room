@@ -62,7 +62,8 @@ declare module 'claude-code' {
       mode: AutoMode
       hops: number
       me: string
-      draft: string
+      /** Bumped on each send; the field's key, so sending replaces it empty. */
+      round: number
       room: RoomConfig | null
       /** Why the room cannot be reached, when it cannot; empty otherwise. */
       trouble: string
