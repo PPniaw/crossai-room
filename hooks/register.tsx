@@ -612,7 +612,16 @@ export const register: Register = on => {
       else await record($, mine(line, 'pending', '送不出去,按一次再試'))
     }
 
-    const explain = now === 'off' ? '都要你按' : now === 'in' ? '自動收,送出要按' : '全自動'
+    // Naming the modes after what is automatic read as "fetch automatically",
+    // which every mode does: the poll is what puts anything in the pane at
+    // all. What the modes decide is what happens to a message once it is
+    // here, so the line says that instead.
+    const explain =
+      now === 'off'
+        ? '進來的和送出的都等你按'
+        : now === 'in'
+          ? '進來的自動給 Claude,送出的等你按'
+          : '進來的自動給 Claude,回覆也自動送出'
     const shown = said.slice(-SHOW)
     const hidden = said.length - shown.length
     const label = (turn: Turn): string => (turn.side === 'me' ? name || '我' : turn.name)
