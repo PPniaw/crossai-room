@@ -738,17 +738,16 @@ export const register: Register = on => {
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
-          {/* What is known, said as what it is. `peer-human` is an account of
-            * its own, which the transport proves. A mark says the message
-            * came from the far pane's field -- an action reported, not an
-            * identity: "自稱本人" still claimed a person and hedged, where
-            * the mark only ever said where it was typed. With no mark the
-            * room knows nothing, so it says nothing: most messages are the
-            * far side's Claude, and "不確定" beside every one of them was
-            * noise that read as a warning. Saying nothing claims nothing. */}
-          <Text dimColor>
-            {said.from === 'peer-human' ? '本人' : said.claimed ? '在聊天室輸入訊息' : ''}
-          </Text>
+          {/* Two states, from what can be detected: a message out of the far
+            * side's own field is their person, anything else is their Claude.
+            *
+            * The field's mark is a convention between two copies of this mod,
+            * not a proof -- anyone holding the room's credential can post
+            * without it, or with it. It decides a label and the brake, never
+            * authority: every message is authority="none" either way. Where
+            * the far side's person has an account of their own, the transport
+            * settles it instead, and that is what `peer-human` is. */}
+          <Text dimColor>{said.from === 'peer-human' || said.claimed ? '本人' : '的 Claude'}</Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
           <drawn.Markdown text={said.body} />
