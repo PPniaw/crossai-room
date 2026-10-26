@@ -657,12 +657,13 @@ export const register: Register = on => {
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
-          {/* Only `peer-human` is proved -- an account of its own. Through a
-            * side's bot the room cannot tell their person from their Claude,
-            * so it says the mark was made, not who made it. A label that
-            * reads as identity and is only a claim is worse than none. */}
+          {/* Three states, and the room says plainly which it is in. Only
+            * `peer-human` is proved -- an account of its own. Through a side's
+            * bot their person and their Claude are one credential, so a mark
+            * is a claim and no mark is not knowing. Saying "不確定" is the
+            * honest form of that; inventing a word for it is not. */}
           <Text dimColor>
-            {said.from === 'peer-human' ? '本人' : said.claimed ? '標記為手打' : ''}
+            {said.from === 'peer-human' ? '本人' : said.claimed ? '自稱本人' : '不確定'}
           </Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
