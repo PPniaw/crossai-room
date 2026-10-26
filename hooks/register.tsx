@@ -771,7 +771,13 @@ export const register: Register = on => {
 
       return (
         <Box key={turn.id} flexDirection="column" marginBottom={1}>
-          <Box justifyContent={place}>
+          {/* The same badge the transcript card draws, so the two views of
+            * one room are recognisably the same room. Smaller: the pane is
+            * narrow and the name beside it is already doing the naming. */}
+          <Box justifyContent={place} gap={1} alignItems="center">
+            {'Svg' in elements && (
+              <elements.Svg source={badge(label(turn), 14)} alt={label(turn)} />
+            )}
             <Text color={right ? 'claude' : 'permission'} bold>
               {label(turn)}
             </Text>

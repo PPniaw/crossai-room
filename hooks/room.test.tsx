@@ -385,3 +385,16 @@ test('the badge is the name\'s own, and only where it can be drawn', async ($, o
   expect((await terminal.find({ type: 'Text', text: /alex/ }))?.text).toBe('alex')
   await terminal.unmount()
 })
+
+test('the pane and the transcript draw the same room the same way', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+  await say(ui, '我自己打的一句話')
+
+  // One room, two views: the badge is what makes them recognisably one.
+  expect(await ui.find({ type: 'Svg' })).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /^eddie$/ }))?.text).toBe('eddie')
+  await ui.unmount()
+})
