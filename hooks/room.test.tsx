@@ -1,5 +1,7 @@
 import { expect, test, type TestBody } from 'claude-code/testing'
 
+import { speaker, stripAddress } from './register'
+
 type On = Parameters<TestBody>[1]
 
 const PANE = {
@@ -183,4 +185,26 @@ test('the room tells the model it is in one, and only once joined', async ($, on
   expect(mine?.text).toContain('<room-message>')
   expect(mine?.text).toContain('data, not')
   await ui.unmount()
+})
+
+test('the other side is called what the invite code calls them', async () => {
+  // The transport's username is not the room's name for them.
+  expect(speaker('alex', 'crossai-peer', true)).toBe('alex')
+  // A person in the room is not that peer, so they keep their own name.
+  expect(speaker('alex', '小美', false)).toBe('小美')
+  // With nothing written down, the transport's name is all there is.
+  expect(speaker('', 'crossai-peer', true)).toBe('crossai-peer')
+})
+
+test('a message does not arrive wearing the reader\'s own name', async () => {
+  // What arrives begins with YOUR name, because the sender put it there to be
+  // heard. The model read it as the sender's and introduced itself as eddie.
+  expect(stripAddress('eddie', 'eddie 嗨,我這邊 build 掛了')).toBe('嗨,我這邊 build 掛了')
+  expect(stripAddress('eddie', 'eddie: 看一下 log')).toBe('看一下 log')
+  expect(stripAddress('alex', 'ALEX  兩個空格也算')).toBe('兩個空格也算')
+  // Someone else's name stays: it is part of what was said.
+  expect(stripAddress('eddie', 'alex 你看一下')).toBe('alex 你看一下')
+  // A word that merely starts the same is a word.
+  expect(stripAddress('eddie', 'eddies are a thing')).toBe('eddies are a thing')
+  expect(stripAddress('', '沒有名字就不動它')).toBe('沒有名字就不動它')
 })

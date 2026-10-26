@@ -156,6 +156,39 @@ async function deliver($: EngineInterface, text: string): Promise<boolean> {
   return true
 }
 
+/**
+ * What to call whoever said this.
+ *
+ * The transport's own username is not the room's name for them: the room's
+ * name is the one this side wrote down when it joined (`to`). Showing the
+ * transport's instead put `crossai-peer` in front of the model while the pane
+ * beside it said `alex`, and the model went with the one it could read.
+ *
+ * A person speaking in the room is not that peer, so they keep their own name.
+ */
+export function speaker(to: string, username: string, isBot: boolean): string {
+  return isBot && to ? to : username
+}
+
+/**
+ * Drop the name this side answers to from the front of a message.
+ *
+ * Each side puts the far side's name in front of what it sends, so what
+ * arrives begins with *your* name, not the sender's. Left in, the model reads
+ * "eddie 嗨, …" and concludes it is eddie -- which is exactly what the other
+ * side's Claude did on its first message through the room.
+ */
+export function stripAddress(name: string, text: string): string {
+  if (!name) return text
+  const head = text.slice(0, name.length)
+  if (head.toLowerCase() !== name.toLowerCase()) return text
+  const rest = text.slice(name.length)
+  // Only when the name stands alone: "eddie 嗨" is addressing, "eddies" is a word.
+  if (!/^[\s,:：,、]/.test(rest)) return text
+
+  return rest.replace(/^[\s,:：,、]+/, '')
+}
+
 /** Whatever the transport holds that this side has not taken yet. */
 async function arrivals($: EngineInterface): Promise<Incoming[]> {
   const cfg = await address($)
@@ -200,11 +233,12 @@ async function arrivals($: EngineInterface): Promise<Incoming[]> {
     if (!text) continue
     if (wire.author?.id === who) continue
     if (text.startsWith(NOTICE)) continue
+    const isBot = Boolean(wire.author?.bot)
     fresh.push({
       id: wire.id,
-      from: String(wire.author?.username ?? 'the other side'),
-      role: wire.author?.bot ? 'peer-ai' : 'peer-human',
-      text,
+      from: speaker(cfg.to, String(wire.author?.username ?? 'the other side'), isBot),
+      role: isBot ? 'peer-ai' : 'peer-human',
+      text: stripAddress(cfg.name, text),
     })
   }
 
