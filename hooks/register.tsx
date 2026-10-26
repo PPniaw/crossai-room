@@ -958,7 +958,17 @@ export const register: Register = on => {
         {!here && <Text dimColor>把對方給你的邀請碼貼到下面那格,按「送」就加入了</Text>}
         {wrong.length > 0 && <Text color="error">{wrong}</Text>}
         {now !== 'off' && spent >= MAX_HOPS && (
-          <Text dimColor>自動回覆暫停中:說句話就會再接下去</Text>
+          <Box gap={1} alignItems="center" marginTop={1}>
+            <Text dimColor>自動回覆暫停中</Text>
+            {/* The brake waits for a person, and pressing this is a person
+              * acting -- the same event as typing, without having to think
+              * of something to say to a conversation you already want to
+              * continue. It is not a loosening of the rule. */}
+            <Button key="resume" label="▶ 再接下去" onPress={async () => {
+              await update($, hops, () => 0)
+              await $.ui.toast('好,下一則會自動接。')
+            }} />
+          </Box>
         )}
 
         {/* The room grows to fill the pane, which puts the field at the

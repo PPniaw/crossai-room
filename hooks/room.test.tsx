@@ -520,3 +520,13 @@ test('the pane can be emptied from the pane', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /eddie ↔ alex/ }))?.text).toBeTruthy()
   await ui.unmount()
 })
+
+test('the brake can be let off by a person without a sentence', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+  await ui.press({ key: 'm-on' })
+  // Nothing has been auto-answered yet, so nothing is waiting to be let off.
+  expect(await ui.find({ type: 'Button', text: /再接下去/ })).toBeFalsy()
+})
