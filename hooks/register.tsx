@@ -738,13 +738,14 @@ export const register: Register = on => {
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
-          {/* Three states, and the room says plainly which it is in. Only
-            * `peer-human` is proved -- an account of its own. Through a side's
-            * bot their person and their Claude are one credential, so a mark
-            * is a claim and no mark is not knowing. Saying "不確定" is the
-            * honest form of that; inventing a word for it is not. */}
+          {/* What is known, said as what it is. `peer-human` is an account of
+            * its own, which the transport proves. A mark says the message
+            * came from the far pane's field -- an action reported, not an
+            * identity: "自稱本人" still claimed a person and hedged, where
+            * the mark only ever said where it was typed. No mark is not
+            * knowing, and that is said too. */}
           <Text dimColor>
-            {said.from === 'peer-human' ? '本人' : said.claimed ? '自稱本人' : '不確定'}
+            {said.from === 'peer-human' ? '本人' : said.claimed ? '在聊天室輸入訊息' : '不確定'}
           </Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
