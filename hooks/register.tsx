@@ -571,7 +571,8 @@ export const register: Register = on => {
       name: '',
       body: e.props.text.replace(/^The [^\n]* plugin sent a message:\n/, '').trim(),
     }
-    const { Box, Text } = $.ui.resolve(e)
+    const drawn = $.ui.resolve(e)
+    const { Box, Text } = drawn
 
     // A bubble, and `alignSelf` so it hugs what was said instead of running
     // the width of the transcript: a short line in a full-width box reads as
@@ -585,14 +586,16 @@ export const register: Register = on => {
           </Text>
           <Text dimColor>{said.from === 'peer-human' ? '對面的人' : '對面的 Claude'}</Text>
         </Box>
-        <Box
-          borderStyle="round"
-          borderColor="permission"
-          paddingX={1}
-          alignSelf="flex-start"
-          flexShrink={1}
-        >
-          <Text>{said.body}</Text>
+        <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
+          {/*
+            * The other side writes markdown -- code fences, bold, lists --
+            * because it is a Claude writing to a Claude. Drawn as plain text
+            * its own formatting became literal backticks and asterisks in
+            * front of the person, which is the opposite of a card.
+            *
+            * `Markdown` is on every surface's table, so this needs no guard.
+            */}
+          <drawn.Markdown text={said.body} />
         </Box>
       </Box>
     )

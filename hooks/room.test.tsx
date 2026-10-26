@@ -298,7 +298,9 @@ test('a room message is drawn as a card, with the plumbing left out', async ($, 
 
   // What the person needs: who said it, and what they said.
   expect((await ui.find({ type: 'Text', text: /alex/ }))?.text).toBeTruthy()
-  expect((await ui.find({ type: 'Text', text: /1\+1/ }))?.text).toBe('1+1 = ?')
+  // The body is markdown because the other side writes markdown: drawn as
+  // plain text, its own formatting lands in front of the person as symbols.
+  expect((await ui.find({ type: 'Markdown' }))?.props?.text).toBe('1+1 = ?')
   expect((await ui.find({ type: 'Text', text: /對面的人/ }))?.text).toBe('對面的人')
   // A bubble that hugs what was said, rather than a full-width panel: the
   // whole point of the drawing is that this came from somewhere else.
@@ -353,6 +355,6 @@ test('an envelope that does not parse still does not dump the plumbing', async (
   })
 
   expect(await ui.find({ type: 'Text', text: /plugin sent a message/ })).toBeFalsy()
-  expect((await ui.find({ type: 'Text', text: /在這裡/ }))?.text).toBeTruthy()
+  expect((await ui.find({ type: 'Markdown' }))?.props?.text).toContain('在這裡')
   await ui.unmount()
 })
