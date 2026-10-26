@@ -190,7 +190,11 @@ test('the room tells the model it is in one, and only once joined', async ($, on
 test('the other side is called what the invite code calls them', async () => {
   // The transport's username is not the room's name for them.
   expect(speaker('alex', 'crossai-peer', true)).toBe('alex')
-  // A person in the room is not that peer, so they keep their own name.
+  // A person on the far side arrives through that side's bot, so they are
+  // still that side: naming them after the bot's account is the one name
+  // certainly not theirs.
+  expect(speaker('alex', 'crossai-peer', true)).toBe('alex')
+  // Someone with an account of their own in the room keeps their own name.
   expect(speaker('alex', '小美', false)).toBe('小美')
   // With nothing written down, the transport's name is all there is.
   expect(speaker('', 'crossai-peer', true)).toBe('crossai-peer')

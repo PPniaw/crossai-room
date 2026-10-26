@@ -204,8 +204,14 @@ async function deliver($: EngineInterface, text: string, byHand = false): Promis
  *
  * A person speaking in the room is not that peer, so they keep their own name.
  */
-export function speaker(to: string, username: string, isBot: boolean): string {
-  return isBot && to ? to : username
+export function speaker(to: string, username: string, viaBot: boolean): string {
+  // `viaBot` is about the credential, not the author: a person on the far
+  // side reaches the room through their own bot, so everything from that side
+  // is the far side, person or not, and the room's name for it is `to`.
+  //
+  // Deciding this by "did a person type it" put the bot's account name on a
+  // person -- the one name that is certainly not theirs.
+  return viaBot && to ? to : username
 }
 
 /**
@@ -275,11 +281,11 @@ async function arrivals($: EngineInterface): Promise<Incoming[]> {
     // A person on the far side reaches the room through their own bot, so the
     // transport calls them a bot too; only the marker tells them apart.
     const byHand = said.startsWith(`${HUMAN} `)
-    const isBot = Boolean(wire.author?.bot) && !byHand
+    const viaBot = Boolean(wire.author?.bot)
     fresh.push({
       id: wire.id,
-      from: speaker(cfg.to, String(wire.author?.username ?? 'the other side'), isBot),
-      role: isBot ? 'peer-ai' : 'peer-human',
+      from: speaker(cfg.to, String(wire.author?.username ?? 'the other side'), viaBot),
+      role: viaBot && !byHand ? 'peer-ai' : 'peer-human',
       text: byHand ? said.slice(HUMAN.length + 1) : said,
     })
   }
