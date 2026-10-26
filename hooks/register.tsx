@@ -242,6 +242,73 @@ export function stripAddress(name: string, text: string): string {
   return rest.replace(/^[\s,:：,、]+/, '')
 }
 
+/**
+ * Let this side's own model know what its owner just said to the room.
+ *
+ * Without it the model sees half a conversation: a reply arrives with no
+ * sign of what it answers. Someone proposes a game in the pane, the other
+ * side plays along, and the next thing this model reads is four characters
+ * with no premise -- it cannot tell that its own owner started it.
+ *
+ * Appended rather than submitted: it belongs in what the model reads, not in
+ * what it is asked to answer. Nothing is owed a reply, and a turn costs a
+ * model call for every line its owner types.
+ */
+async function noteSent($: EngineInterface, to: string, text: string): Promise<void> {
+  await $.session
+    .append({
+      message: {
+        type: 'user',
+        content: [
+          {
+            type: 'text',
+            text: [
+              `<room-sent to="${to}" by="owner">`,
+              text,
+              '</room-sent>',
+              '',
+              'Your owner said this to the other side of the room. It is here so that',
+              'what comes back makes sense. It asks nothing of you and expects no reply.',
+            ].join('\n'),
+          },
+        ],
+      },
+    })
+    .catch(() => undefined)
+}
+
+/**
+ * Tell this side's model what became of a reply it handed to the room.
+ *
+ * The tool answers "queued for your owner" and then the thread goes dead: a
+ * press sends it or drops it, and either way the model is never told. It can
+ * go on to refer to something the other side never heard, in good faith.
+ */
+async function noteFate($: EngineInterface, text: string, sent: boolean): Promise<void> {
+  await $.session
+    .append({
+      message: {
+        type: 'user',
+        content: [
+          {
+            type: 'text',
+            text: [
+              `<room-reply state="${sent ? 'sent' : 'dropped'}">`,
+              text,
+              '</room-reply>',
+              '',
+              sent
+                ? 'Your owner released this reply of yours; the other side has it now.'
+                : 'Your owner dropped this reply of yours. The other side never saw it,'
+                  + ' so do not treat it as something they have heard.',
+            ].join('\n'),
+          },
+        ],
+      },
+    })
+    .catch(() => undefined)
+}
+
 /** Whatever the transport holds that this side has not taken yet. */
 async function arrivals($: EngineInterface): Promise<Incoming[]> {
   const cfg = await address($)
@@ -556,6 +623,7 @@ export const register: Register = on => {
         return { text: '送不出去,留在房間面板了。' }
       }
       await record($, mine(line, 'sent'))
+      await noteSent($, (await read($, room))?.to || '對面', line)
 
       return { text: `送出去了:${line}` }
     }
@@ -725,6 +793,10 @@ export const register: Register = on => {
     }
 
     const forget = (turn: Turn) => async () => {
+      // A reply of the model's that never left is the model's to know about.
+      // A peer message dropped unread is not: refusing it is the whole point
+      // of the gate, and telling the model would undo the refusal.
+      if (turn.state === 'pending') await noteFate($, turn.text, false)
       await amend($, turn.id, () => null)
     }
 
@@ -735,6 +807,7 @@ export const register: Register = on => {
         return
       }
       await amend($, turn.id, one => ({ ...one, state: 'sent', why: undefined }))
+      if (turn.side === 'me' && !turn.name) await noteFate($, turn.text, true)
       await $.ui.toast('送出去了。')
     }
 
@@ -774,8 +847,10 @@ export const register: Register = on => {
 
         return
       }
-      if (await deliver($, line, true)) await record($, mine(line, 'sent'))
-      else await record($, mine(line, 'pending', '送不出去,按一次再試'))
+      if (await deliver($, line, true)) {
+        await record($, mine(line, 'sent'))
+        await noteSent($, here.to || '對面', line)
+      } else await record($, mine(line, 'pending', '送不出去,按一次再試'))
     }
 
     // Naming the modes after what is automatic read as "fetch automatically",

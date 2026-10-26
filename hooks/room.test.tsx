@@ -433,3 +433,52 @@ test('a claim is drawn as a claim, and only what is proved as fact', async () =>
   expect(unwrap(ENVELOPE)?.claimed).toBe(false)
   expect(unwrap(ENVELOPE)?.from).toBe('peer-human')
 })
+
+test('the model is told what its owner said to the room', async ($, on) => {
+  const sent: string[] = []
+  const rows: string[] = []
+  engine(on, sent)
+  // The kit keeps the row itself; this hook only watches it go by.
+  on('session.append', (_, e, next) => {
+    const block = (e.message.content as Array<{ text?: string }>)[0]
+    rows.push(String(block?.text ?? ''))
+
+    return next(e)
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+
+  await say(ui, '改成語接龍')
+
+  // Without this the model reads the reply with no sign of what it answers:
+  // four characters come back and it cannot tell its own owner started it.
+  const noted = rows.find(one => one.includes('改成語接龍'))
+  expect(noted).toBeTruthy()
+  expect(noted).toContain('<room-sent to="alex" by="owner">')
+  expect(noted).toContain('expects no reply')
+  await ui.unmount()
+})
+
+test('the model learns whether its reply left or was dropped', async ($, on) => {
+  const sent: string[] = []
+  const rows: string[] = []
+  engine(on, sent)
+  on('session.append', (_, e, next) => {
+    rows.push(String((e.message.content as Array<{ text?: string }>)[0]?.text ?? ''))
+
+    return next(e)
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+
+  await $.tool.call({ tool: 'mcp__crossai-room__say_to_peer', text: '這句會被丟掉' })
+  await ui.press({ key: (await ui.find({ type: 'Button', text: /先留著/ }))!.key! })
+
+  // Otherwise the model goes on referring to something nobody heard.
+  const dropped = rows.find(one => one.includes('這句會被丟掉'))
+  expect(dropped).toContain('state="dropped"')
+  expect(dropped).toContain('never saw it')
+  await ui.unmount()
+})
