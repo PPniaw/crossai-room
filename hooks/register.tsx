@@ -326,24 +326,18 @@ function preview(text: string, width = 64): string {
 }
 
 /**
- * Pull the room's own message out of whatever props carry it.
+ * Pull the room's own message out of the text the model was given.
  *
- * The envelope is found by searching the props rather than by naming a field,
- * because which field holds a transcript row's text is not ours to depend on:
- * a hook that guessed wrong would quietly stop matching one day, and the
- * symptom would be the raw envelope coming back with nothing saying why.
+ * Only the envelope is read here; whether the row is this plugin's at all is
+ * settled by its `origin`, which the engine stamps and the types declare.
+ * Matching on the text alone would have drawn a card around anyone who
+ * quoted an envelope back at us.
  */
-export function unwrap(props: unknown): { from: string; name: string; text: string } | null {
-  const blob = JSON.stringify(props ?? '')
-  if (!blob.includes('<room-message')) return null
-  const found = /<room-message from=\\"([^\\"]*)\\" name=\\"([^\\"]*)\\"[^>]*>\\n([\s\S]*?)\\n<\/room-message>/.exec(blob)
+export function unwrap(text: string): { from: string; name: string; body: string } | null {
+  const found = /<room-message from="([^"]*)" name="([^"]*)"[^>]*>\n([\s\S]*?)\n<\/room-message>/.exec(text)
   if (!found) return null
 
-  return {
-    from: found[1] ?? '',
-    name: found[2] ?? '',
-    text: (found[3] ?? '').replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim(),
-  }
+  return { from: found[1] ?? '', name: found[2] ?? '', body: (found[3] ?? '').trim() }
 }
 
 export const register: Register = on => {
@@ -557,19 +551,33 @@ export const register: Register = on => {
    * the original props, so the worst case is the text as it was.
    */
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
-    const said = unwrap(e.props)
+    const origin = e.props.origin
+    if (origin?.kind !== 'plugin' || origin.name !== 'crossai-room') return next(e)
+    const said = unwrap(e.props.text)
     if (!said) return next(e)
     const { Box, Text } = $.ui.resolve(e)
 
+    // A bubble, and `alignSelf` so it hugs what was said instead of running
+    // the width of the transcript: a short line in a full-width box reads as
+    // a panel, which is what the engine already draws. The whole point is
+    // that this came from somewhere else.
     return (
       <Box flexDirection="column" marginBottom={1}>
         <Box gap={1}>
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
-          <Text dimColor>{said.from === 'peer-human' ? '(對面的人)' : '(對面的 Claude)'}</Text>
+          <Text dimColor>{said.from === 'peer-human' ? '對面的人' : '對面的 Claude'}</Text>
         </Box>
-        <Text>{said.text}</Text>
+        <Box
+          borderStyle="round"
+          borderColor="permission"
+          paddingX={1}
+          alignSelf="flex-start"
+          flexShrink={1}
+        >
+          <Text>{said.body}</Text>
+        </Box>
       </Box>
     )
   })

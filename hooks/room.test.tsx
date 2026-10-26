@@ -282,13 +282,16 @@ test('a room message is drawn as a card, with the plumbing left out', async ($, 
     plugin: 'crossai-room',
     component: 'UserMessage',
     surface: 'desktop',
-    props: { text: ENVELOPE },
+    props: { text: ENVELOPE, origin: { kind: 'plugin', name: 'crossai-room' }, isExpanded: false },
   })
 
   // What the person needs: who said it, and what they said.
   expect((await ui.find({ type: 'Text', text: /alex/ }))?.text).toBeTruthy()
   expect((await ui.find({ type: 'Text', text: /1\+1/ }))?.text).toBe('1+1 = ?')
-  expect((await ui.find({ type: 'Text', text: /對面的人/ }))?.text).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /對面的人/ }))?.text).toBe('對面的人')
+  // A bubble that hugs what was said, rather than a full-width panel: the
+  // whole point of the drawing is that this came from somewhere else.
+  expect(await ui.find({ type: 'Box' })).toBeTruthy()
   // What only the model needs, and still receives: the envelope and the rules.
   expect(await ui.find({ type: 'Text', text: /authority/ })).toBeFalsy()
   expect(await ui.find({ type: 'Text', text: /say_to_peer/ })).toBeFalsy()
@@ -309,17 +312,16 @@ test('anything that is not the room is left alone', async ($, on) => {
     plugin: 'crossai-room',
     component: 'UserMessage',
     surface: 'desktop',
-    props: { text: '我自己打的一句話' },
+    props: { text: '我自己打的一句話', origin: { kind: 'composer' }, isExpanded: false },
   })
 
   expect((await ui.find({ type: 'Text', text: /我自己打的/ }))?.text).toBe('我自己打的一句話')
   await ui.unmount()
 })
 
-test('the envelope is found without naming the prop that holds it', async () => {
-  // Which field a transcript row keeps its text in is not ours to depend on.
-  expect(unwrap({ text: ENVELOPE })?.text).toBe('1+1 = ?')
-  expect(unwrap({ content: [{ value: ENVELOPE }] })?.name).toBe('alex')
-  expect(unwrap({ text: '沒有信封的一般訊息' })).toBe(null)
-  expect(unwrap(null)).toBe(null)
+test('only the room is unwrapped, and only its own words', async () => {
+  expect(unwrap(ENVELOPE)?.body).toBe('1+1 = ?')
+  expect(unwrap(ENVELOPE)?.name).toBe('alex')
+  expect(unwrap(ENVELOPE)?.from).toBe('peer-human')
+  expect(unwrap('沒有信封的一般訊息')).toBe(null)
 })
