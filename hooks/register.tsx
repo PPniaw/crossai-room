@@ -482,7 +482,24 @@ export const register: Register = on => {
 
     // Runs on the mod's own clock, not a turn's: this is what lets a message
     // arrive while the session sits idle.
+    //
+    // One at a time. The timer does not wait for the last one to finish, so a
+    // fetch slower than the interval let the next tick go out carrying the
+    // same cursor, and the same message was delivered twice -- once as a
+    // card, once again a moment later, with nothing on the sending side to
+    // show for it.
+    let polling = false
     const poll = async (): Promise<void> => {
+      if (polling) return
+      polling = true
+      try {
+        await take()
+      } finally {
+        polling = false
+      }
+    }
+
+    const take = async (): Promise<void> => {
       const fresh = await arrivals($)
       if (fresh.length === 0) return
 
