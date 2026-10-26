@@ -1,6 +1,6 @@
 import { expect, test, type TestBody } from 'claude-code/testing'
 
-import { speaker, stripAddress, unwrap } from './register'
+import { badge, speaker, stripAddress, unwrap } from './register'
 
 type On = Parameters<TestBody>[1]
 
@@ -357,4 +357,31 @@ test('an envelope that does not parse still does not dump the plumbing', async (
   expect(await ui.find({ type: 'Text', text: /plugin sent a message/ })).toBeFalsy()
   expect((await ui.find({ type: 'Markdown' }))?.props?.text).toContain('在這裡')
   await ui.unmount()
+})
+
+test('the badge is the name\'s own, and only where it can be drawn', async ($, on) => {
+  // The same name gives the same colour on both sides of the room, with
+  // nobody configuring it; a different name gives a different one.
+  expect(badge('alex')).toBe(badge('alex'))
+  expect(badge('alex')).not.toBe(badge('eddie'))
+  expect(badge('<script>')).not.toContain('<script>')
+
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const props = {
+    text: ENVELOPE,
+    origin: { kind: 'plugin' as const, name: 'crossai-room' },
+    isExpanded: false,
+  }
+
+  const desktop = await $.ui.mount({ plugin: 'crossai-room', component: 'UserMessage', surface: 'desktop', props })
+  expect(await desktop.find({ type: 'Svg' })).toBeTruthy()
+  await desktop.unmount()
+
+  // The terminal has no Svg in its table, so the coloured name does the work
+  // alone rather than the tree being refused as a whole.
+  const terminal = await $.ui.mount({ plugin: 'crossai-room', component: 'UserMessage', surface: 'terminal', props })
+  expect(await terminal.find({ type: 'Svg' })).toBeFalsy()
+  expect((await terminal.find({ type: 'Text', text: /alex/ }))?.text).toBe('alex')
+  await terminal.unmount()
 })

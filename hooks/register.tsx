@@ -335,6 +335,34 @@ function preview(text: string, width = 64): string {
 }
 
 /**
+ * A round badge with the speaker's initial, drawn from their name.
+ *
+ * Not their real picture: `Image` takes bytes or a local file and the only
+ * network a mod has answers text, so a picture hosted elsewhere cannot be
+ * fetched and drawn. A badge needs nothing fetched and is the same on every
+ * device, which a picture would not be.
+ *
+ * The colour is the name's own, so the same person is the same colour on both
+ * sides of the room without anyone configuring it. It is stated rather than
+ * themed because SVG carries no theme keys: mid-lightness with white on top
+ * reads in a light window and a dark one.
+ */
+export function badge(name: string, size = 22): string {
+  const first = [...name][0] ?? '?'
+  let hue = 0
+  for (const c of name) hue = (hue * 31 + (c.codePointAt(0) ?? 0)) % 360
+  const safe = first.replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[ch] ?? ch)
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="${size}" height="${size}">`,
+    `<circle cx="20" cy="20" r="20" fill="hsl(${hue} 52% 46%)"/>`,
+    `<text x="20" y="27" text-anchor="middle" font-family="sans-serif" font-size="21" fill="#fff">${safe}</text>`,
+    '</svg>',
+  ].join('')
+}
+
+/**
  * Pull the room's own message out of the text the model was given.
  *
  * Only the envelope is read here; whether the row is this plugin's at all is
@@ -580,7 +608,11 @@ export const register: Register = on => {
     // that this came from somewhere else.
     return (
       <Box flexDirection="column" marginBottom={1}>
-        <Box gap={1}>
+        <Box gap={1} alignItems="center">
+          {/* No Svg on the terminal, where the coloured name does the work. */}
+          {'Svg' in drawn && (
+            <drawn.Svg source={badge(said.name || '對面')} alt={said.name || '對面'} />
+          )}
           <Text color="permission" bold>
             {said.name || '對面'}
           </Text>
