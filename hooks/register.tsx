@@ -798,6 +798,15 @@ export const register: Register = on => {
       )
     }
 
+    const wipe = async (): Promise<void> => {
+      const had = (await read($, history)).length
+      await update($, history, () => [])
+      await update($, trouble, () => '')
+      // A button has no answer to read, so the toast carries what the command
+      // says in words: this empties the pane and nothing else.
+      await $.ui.toast(`清空了 ${had} 則。送出去的收不回來,Claude 讀過的要用 /clear。`)
+    }
+
     const letIn = (turn: Turn) => async () => {
       await amend($, turn.id, one => ({ ...one, state: 'in', why: undefined }))
       void $.prompt.submit({
@@ -931,9 +940,14 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
-        <Box>
-          <Text bold>{here ? `${name} ↔ ${here.to || '對面'}` : '還沒加入房間'}</Text>
-          <Text dimColor> · {explain}</Text>
+        <Box justifyContent="space-between">
+          <Box>
+            <Text bold>{here ? `${name} ↔ ${here.to || '對面'}` : '還沒加入房間'}</Text>
+            <Text dimColor> · {explain}</Text>
+          </Box>
+          {/* Only when there is something to clear: a button that does
+            * nothing is a button to wonder about. */}
+          {said.length > 0 && <Button key="wipe" label="✕ 清空" dimColor onPress={wipe} />}
         </Box>
         <Box gap={1} marginBottom={1}>
           {modeButton('off', '都問我')}

@@ -26,6 +26,13 @@ AI 看到同一份原文。
 /plugin install crossai-room --marketplace PPniaw/crossai-room
 ```
 
+## 清空面板
+
+面板右上角有「**✕ 清空**」,有東西可清的時候才會出現。或在聊天框打 `/room clear`。
+
+它只清面板的紀錄。**已經送出去的收不回來**,而你的 Claude 讀過的還在它的上下文裡——
+那個要用 `/clear`。三件不同的事。
+
 ## 在手機上
 
 手機版的 Claude 畫不出輸入框,所以面板最下面那一格不會出現。其他都在:訊息看得到,

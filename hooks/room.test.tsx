@@ -502,3 +502,21 @@ test('clearing the pane clears the pane and nothing else', async ($, on) => {
   expect(String(answer.text)).toContain('收不回來')
   await ui.unmount()
 })
+
+test('the pane can be emptied from the pane', async ($, on) => {
+  engine(on, [])
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await say(ui, CODE)
+  // Nothing said yet, so nothing to clear and no button to wonder about.
+  expect(await ui.find({ type: 'Button', text: /清空/ })).toBeFalsy()
+
+  await say(ui, '一句話')
+  await ui.press({ key: 'wipe' })
+
+  expect(await ui.find({ type: 'Text', text: /一句話/ })).toBeFalsy()
+  expect(await ui.find({ type: 'Button', text: /清空/ })).toBeFalsy()
+  // Clearing the record is not leaving the room.
+  expect((await ui.find({ type: 'Text', text: /eddie ↔ alex/ }))?.text).toBeTruthy()
+  await ui.unmount()
+})
