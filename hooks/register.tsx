@@ -659,21 +659,29 @@ export const register: Register = on => {
         {hidden > 0 && <Text dimColor>只畫最近 {SHOW} 則,上面還有 {hidden} 則</Text>}
         {shown.map(line)}
 
-        {canCompose ? (
-          <elements.Input
-            key="compose"
-            label={here ? `對 ${here.to || '對面'} 說` : '邀請碼'}
-            placeholder={here ? '打一句話直接送過去' : '貼在這裡'}
-            submitLabel="送"
-            value={typed}
-            // The field keeps what was typed until the hook draws a different
-            // value, so a `draft` that never changes clears nothing.
-            onInput={(value: string) => void update($, draft, () => value)}
-            onSubmit={(value: string) => void compose(value)}
-          />
-        ) : (
-          <Text dimColor>這個介面沒有輸入框,要用 /room join 才能加入</Text>
-        )}
+        {/*
+          * The field is the last thing in the tree, and focusing it draws a
+          * ring the pane has no row left to show: it came out clipped along
+          * the bottom edge. The margin is that row, kept whether or not the
+          * field has the focus, so the layout does not move when it takes it.
+          */}
+        <Box flexDirection="column" marginTop={1} marginBottom={1}>
+          {canCompose ? (
+            <elements.Input
+              key="compose"
+              label={here ? `對 ${here.to || '對面'} 說` : '邀請碼'}
+              placeholder={here ? '打一句話直接送過去' : '貼在這裡'}
+              submitLabel="送"
+              value={typed}
+              // The field keeps what was typed until the hook draws a different
+              // value, so a `draft` that never changes clears nothing.
+              onInput={(value: string) => void update($, draft, () => value)}
+              onSubmit={(value: string) => void compose(value)}
+            />
+          ) : (
+            <Text dimColor>這個介面沒有輸入框,要用 /room join 才能加入</Text>
+          )}
+        </Box>
       </Box>
     )
   })
