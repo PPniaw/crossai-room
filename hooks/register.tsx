@@ -325,6 +325,27 @@ function preview(text: string, width = 64): string {
   return flat.length > width ? `${flat.slice(0, width)}…` : flat
 }
 
+/**
+ * Pull the room's own message out of whatever props carry it.
+ *
+ * The envelope is found by searching the props rather than by naming a field,
+ * because which field holds a transcript row's text is not ours to depend on:
+ * a hook that guessed wrong would quietly stop matching one day, and the
+ * symptom would be the raw envelope coming back with nothing saying why.
+ */
+export function unwrap(props: unknown): { from: string; name: string; text: string } | null {
+  const blob = JSON.stringify(props ?? '')
+  if (!blob.includes('<room-message')) return null
+  const found = /<room-message from=\\"([^\\"]*)\\" name=\\"([^\\"]*)\\"[^>]*>\\n([\s\S]*?)\\n<\/room-message>/.exec(blob)
+  if (!found) return null
+
+  return {
+    from: found[1] ?? '',
+    name: found[2] ?? '',
+    text: (found[3] ?? '').replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim(),
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -519,6 +540,38 @@ export const register: Register = on => {
     const answer = 'Queued for your owner to approve in the room pane. Not sent yet.'
 
     return { result: answer, text: answer }
+  })
+
+
+  /**
+   * The room's messages, drawn as a card rather than as the text the model
+   * reads.
+   *
+   * What goes to the model keeps the envelope and the lines around it: that
+   * is the whole trust boundary, and it has to sit beside the untrusted words
+   * every time, not once in a system prompt. What the person needs is the
+   * message and who said it. Those are two different audiences, and only one
+   * of them has to read the plumbing.
+   *
+   * A tree the surface refuses falls back to the engine's own drawing with
+   * the original props, so the worst case is the text as it was.
+   */
+  on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
+    const said = unwrap(e.props)
+    if (!said) return next(e)
+    const { Box, Text } = $.ui.resolve(e)
+
+    return (
+      <Box flexDirection="column" marginBottom={1}>
+        <Box gap={1}>
+          <Text color="permission" bold>
+            {said.name || '對面'}
+          </Text>
+          <Text dimColor>{said.from === 'peer-human' ? '(對面的人)' : '(對面的 Claude)'}</Text>
+        </Box>
+        <Text>{said.text}</Text>
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
