@@ -742,10 +742,12 @@ export const register: Register = on => {
             * its own, which the transport proves. A mark says the message
             * came from the far pane's field -- an action reported, not an
             * identity: "自稱本人" still claimed a person and hedged, where
-            * the mark only ever said where it was typed. No mark is not
-            * knowing, and that is said too. */}
+            * the mark only ever said where it was typed. With no mark the
+            * room knows nothing, so it says nothing: most messages are the
+            * far side's Claude, and "不確定" beside every one of them was
+            * noise that read as a warning. Saying nothing claims nothing. */}
           <Text dimColor>
-            {said.from === 'peer-human' ? '本人' : said.claimed ? '在聊天室輸入訊息' : '不確定'}
+            {said.from === 'peer-human' ? '本人' : said.claimed ? '在聊天室輸入訊息' : ''}
           </Text>
         </Box>
         <Box borderStyle="round" borderColor="permission" paddingX={1} flexDirection="column">
