@@ -940,15 +940,16 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column">
+        {/* The names and the button on one line, what the modes do on the
+          * next. All three together broke mid-word in a narrow pane: the
+          * room's own name came out split across two lines. */}
         <Box justifyContent="space-between">
-          <Box>
-            <Text bold>{here ? `${name} ↔ ${here.to || '對面'}` : '還沒加入房間'}</Text>
-            <Text dimColor> · {explain}</Text>
-          </Box>
+          <Text bold>{here ? `${name} ↔ ${here.to || '對面'}` : '還沒加入房間'}</Text>
           {/* Only when there is something to clear: a button that does
             * nothing is a button to wonder about. */}
           {said.length > 0 && <Button key="wipe" label="✕ 清空聊天室" dimColor onPress={wipe} />}
         </Box>
+        <Text dimColor>{explain}</Text>
         <Box gap={1} marginBottom={1}>
           {modeButton('off', '都問我')}
           {modeButton('in', '自動收')}
